@@ -56,17 +56,17 @@ if __name__ == "__main__":
     test_dataset = ISICSegmentationDataset(test_img_dir, test_mask_dir)
     test_loader  = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
     model = torch.hub.load('facebookresearch/capi:main', 'capi_vitl14_lvd').to(device)
-    full_features = torch.tensor([]).to(device)
-    full_masks = torch.tensor([]).to(device)
-    for images, masks in tqdm(train_loader):
-        images = images.to(device)
-        masks  = masks.to(device)
-        _, _, features = model(images)
-        train_features = features.flatten(start_dim=1)
-        train_masks = masks.flatten(start_dim=1)
-        full_features = torch.cat((full_features, train_features), dim=0)
-        full_masks = torch.cat((full_masks, train_masks), dim=0)
-        del train_features, train_masks, images, masks, features
-        torch.cuda.empty_cache()
+    full_features = []
+    full_masks = []
+    with torch.no_grad():
+        for images, masks in tqdm(train_loader):
+            images = images.to(device)
+            masks  = masks.to(device)
+            with torch.cuda.amp.autocast():
+                _, _, features = model(images)
+            full_features.append(features.flatten(start_dim=1).cpu())
+            full_masks.append(masks.flatten(start_dim=1).cpu())
+    full_features = torch.cat(full_features, dim=0)
+    full_masks = torch.cat(full_masks, dim=0)
     torch.save(full_features.cpu(), "full_features.pt")
     torch.save(full_masks.cpu(), "full_masks.pt")
